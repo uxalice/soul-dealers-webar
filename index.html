@@ -40,11 +40,9 @@
 		<imagetarget id='lady' src='targets/lady.png'></imagetarget>
 		<imagetarget id='reel' src='targets/reel.png'></imagetarget>
 		<imagetarget id='rmn' src='targets/rmn.png'></imagetarget>
-		<imagetarget id='logo' src='targets/ImageTracker1.png'></imagetarget>
-		<imagetarget id='ID' src='targets/ID.png'></imagetarget>
+		<imagetarget id='bcard' src='targets/bcard.png'></imagetarget>
 
     <video id="webcam-video" muted autoplay playsinline style="width:1px;position:absolute"></video>
-    <!-- <video id="webcam-video" muted autoplay playsinline style="width:100%; height:100%; object-fit:cover; position:absolute"></video> -->
     <canvas id="video-canvas" style="width:100%; height:100%; object-fit:cover; position:absolute"></canvas>
     <div id="startARDiv" class="ctaDiv">
         <select id="chooseCamSel" style="display: none;" onchange="SelectCam()"></select>
@@ -89,7 +87,7 @@
                 window.arCamera = new ARCamera(unityCanvas, videoCanvas);
                 window.iTracker = new ImageTracker(arCamera);
                 try{
-                    await window.iTracker.initialize();
+                    await window.iTracker.initialize("./opencv.js");
                     console.log("ImageTracker initialized!");
                 }
                 catch{
@@ -100,6 +98,7 @@
                 
                 await LoadWebcams();
                 document.getElementById("startARButton").style.display = "block";
+                window.permissionsGranted = IsCameraPermissionGranted();
             }
             initialize();
             var container = document.querySelector("#unity-container");
@@ -128,7 +127,8 @@
                     }
                 ).then((unityInstance) => {
                     window.unityInstance = unityInstance;
-                    RequestWebcam();
+                    if(window.permissionsGranted)
+                        RequestWebcam();
                     loadingBar.style.display = "none";
                 });
                 loadingBar.style.display = "block";
@@ -148,6 +148,8 @@
                     window.webcamStream = await navigator.mediaDevices.getUserMedia(window.WEBCAM_SETTINGS);
                     console.log("Webcam access granted");
                     requestingForPermissions = false;
+                    // Immediately stop the stream to release the camera
+                    StopWebcam();
                 }
                 catch (err) {
                     //user denied camera permission - show error panel
@@ -156,8 +158,13 @@
                     window.requestingForPermissions = false;
                 }           
             }
+            function StopWebcam(){
+                console.log("stopping camera");
+                window.webcamStream.getTracks().forEach(track => track.stop());    
+            }
             async function StartWebcam(){
                 console.log("StartWebcam")
+                window.webcamStream = await navigator.mediaDevices.getUserMedia(window.WEBCAM_SETTINGS);
                 while (window.requestingForPermissions) {
                     // Wait until requestingForPermissions becomes true.
                     console.log("Waiting for permissions...");
@@ -248,6 +255,29 @@
                 const video = document.querySelector("#webcam-video");
                 video.srcObject = webcamStream;
                 await arCamera.startWebcam(video);
+            }
+            async function IsCameraPermissionGranted() {
+                if (!navigator.permissions || !navigator.mediaDevices) {
+                    console.log("Permissions API or mediaDevices not supported.");
+                    return false;
+                }
+                try {
+                    // Query the status of the camera permission
+                    const permissionStatus = await navigator.permissions.query({ name: "camera" });
+                    if (permissionStatus.state === "granted") {
+                    console.log("Camera permission has already been granted.");
+                    return true;
+                    } else if (permissionStatus.state === "prompt") {
+                    console.log("Camera permission is promptable.");
+                    return false;
+                    } else {
+                    console.log("Camera permission has been denied.");
+                    return false;
+                    }
+                } catch (error) {
+                    console.log("Error checking camera permission:", error);
+                    return false;
+                }
             }
             function ShowError(error){
                 document.getElementById("errorDiv").style.display = "flex";
